@@ -1,0 +1,45 @@
+---
+title: "E.D.A Chapter04 R Notebook"
+author: Bryan Lliguicota
+output: html_notebook
+---
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+#4.10 R Lab
+
+##4.10.1 European Stock Indicies
+
+- This lab uses Euro. Stock Indicies in **R's EuStockMarkets** database.
+    - Access the Database
+    - Learn its mode
+    - Learn its class
+    - plot the four time series
+```{r}
+# A class mts stands for multivariate time series
+data("EuStockMarkets")
+print("Mode: ")
+mode(EuStockMarkets)
+print("Class:")
+class(EuStockMarkets)
+plot(EuStockMarkets)
+```
+If you want to save a pdf image of the file run the followin code
+```{r}
+pdf("EuStock.pdf", width = 8, height = 8)
+plot(EuStockMarkets)
+graphics.off()
+```
+
+### Problem 1. 
+Question:    
+* Write a brief description of the time series plots of the four indices. Do the series look stationary? Do the fluctuations in the series seem to be of constant size? If not, describe how the volatility fluctuates. 
+    
+Answer:    
+* The fluctuations in the series are not of constant size, as time passes the variance increase as well as the mean. The volatility before ~1997 is not as high as it's after ~1997. The time series does not look stationary due to the wide range of variance and changing mean.
+
+Compute and plot the log returns on the indicies
+```{r}
+logR = diff(log(EuStockMarkets))
+plot(logR)
+```
+### Problem 2.
