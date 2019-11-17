@@ -14,6 +14,8 @@ Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by press
     - Learn its mode
     - Learn its class
     - plot the four time series
+    
+    
 ```{r}
 # A class mts stands for multivariate time series
 data("EuStockMarkets")
@@ -32,10 +34,10 @@ graphics.off()
 
 ### Problem 1. 
 Question:    
-* Write a brief description of the time series plots of the four indices. Do the series look stationary? Do the fluctuations in the series seem to be of constant size? If not, describe how the volatility fluctuates. 
+Write a brief description of the time series plots of the four indices. Do the series look stationary? Do the fluctuations in the series seem to be of constant size? If not, describe how the volatility fluctuates. 
     
 Answer:    
-* The fluctuations in the series are not of constant size, as time passes the variance increase as well as the mean. The volatility before ~1997 is not as high as it's after ~1997. The time series does not look stationary due to the wide range of variance and changing mean.
+The fluctuations in the series are not of constant size, as time passes the variance increase as well as the mean. The volatility before ~1997 is not as high as it's after ~1997. The time series does not look stationary due to the wide range of variance and changing mean.
 
 Compute and plot the log returns on the indicies
 ```{r}
@@ -43,3 +45,359 @@ logR = diff(log(EuStockMarkets))
 plot(logR)
 ```
 ### Problem 2.
+Question:  
+Write a brief description of the time series plots of the four series of log returns. Do the series look stationary? Do the fluctuations in the series seem to be of constant size? If not, describe how the volatility fluctuates.  
+  
+Answer:   
+Yes, they do seem to be stationary conditional on the time interval, there is also volatility clustering. For the most part, the fluctuations are of constant size with some noticeable outliers. 
+
+>R Lesson: When data is stored in a data frame, it does not assume that the data is in time order. This would be appropriate if were using cross-sectional data.   
+Let's see how `plot()` works with a data frame object as opposed to a multivariate time series.
+
+```{r}
+print(class(logR))
+plot(as.data.frame(logR))
+```
+
+1. Create normal plots of the four indicies
+2. Test each for normality using the Shapiro-Wilk test
+
+
+```{r}
+colnames(logR)
+par(mfrow=c(2,2))
+for(indicie in colnames(logR)){
+  qqnorm(logR[, indicie], datax = T , main = indicie)
+  qqline(logR[, indicie], datax = T)
+  print(shapiro.test(logR[, indicie]))
+}
+```
+
+###Problem 3.
+Question:  
+Briefly describe the shape of each of the four normal plots and state whether the marginal distribution of each series is skewed or symmetric and whether its tails appear normal. If the tails do not appear normal, do they appear heavier or lighter than normal? What conclusions can be made from the Shapiro–Wilk tests? Include the plots with your work.
+  
+Answer:  
+    All four indices are showing a convex-concave shape(in varying degrees), meaning they have heavier tails than the normal distribution. To support this argument the Shapiro Wilk test gives a very small p-value. We can reject the null hypothesis that the data comes from a normal distribution. 
+    
+1. Create t-plots with 1,4,6,10,20 and 30 d.o.f for all four indicies. 
+
+>R Lesson: Notice how the reference line is created with the  `abline()` function, which added a line to the plot. The `lm()` function fits a line to the quantiles. We discuss `lm()` in chapter 9
+
+
+
+```{r}
+n = dim(logR)[1] #get the number of rows
+q_grid = (1:n)/(n+1) #create a vector of n equally spaced elements
+df_grid = c(1,4,6,10,20,30) #d.o.f !!!!
+index_names = colnames(logR)
+
+for(i in 1:4){
+  par(mfrow = c(3,2))
+  
+  for(df in df_grid){
+    qqplot(logR[,i], qt(q_grid,df),
+           main = paste(index_names[i]," ,df = ",df))
+    abline(lm(qt(c(0.25,0.75), df = df) ~ quantile(logR[,i], c(0.25,0.75))))
+  }
+}
+```
+
+###Problem 4. 
+Question:  
+What does the code `q.grid = (1:n) / (n + 1)` do? What does `qt(q.grid, df = df[j])` do? What does paste do?     
+
+Answer:  
+`q.grid = (1:n) / (n + 1)`  creates a vector of n equally spaced points between 1 and n. We use it as a vector of probabilities  
+`qt(q.grid, df = df[j])` , `qt()` is the quantile function for The student t distribution  
+paste converts values to strings and concatenates them into one string.
+
+
+###Problem 5.
+Question:  
+For the DAX index, state which choice of the degrees of freedom parameter gives the best-fitting t-distribution and explain why.  
+  
+Answer:  
+Both d.o.f 4 and 6 seem to be the best fits compared to the rest. As most of the data falls on the reference line except for a handfull of outliers.
+
+
+1. Create a K.D.E 
+2. Create two parametric density estimates, $t$ with **df = 5** d.o.f and normal for the DAX index  
+  i) Note: You should vary the **df** so that the $t$ density agrees as closely as possible with the K.D.E
+3. A **Robust Estimator of the Standard Deviation of the t-dist is calculated using the `mad()` function.
+  i) The default value for `constant` is $1.4846$ to which is calibrated to the normal distribution $\frac{1}{F^{-1}(.75)} = 1.4826$.
+  ii) To calibrate this to the t-dist, the normal quantile is replaced with the t-quantile **and** multiplied by $\frac{df}{df-2}$ to convert from the scale parameter to the S.D
+
+```{r}
+library("fGarch")
+```
+
+```{r}
+par(mfrow  = c(1,1))
+x = seq(-0.1, 0.1, by = 0.001)
+df = 5
+
+mad_t = mad(logR[, "DAX"],
+            constant = sqrt(df/(df-2)) / qt(0.75,df))
+
+plot(density(logR[,"DAX"]) , lwd=2, ylim = c(0,60))
+
+lines(x, dstd(x,mean = mean(logR[ ,"DAX"]), sd = mad_t, nu = df),
+      lty = 5, lwd = 2, col = "red")
+
+lines(x, dnorm(x, mean = mean(logR[,"DAX"]), sd = mad(logR[,"DAX"])),
+      lty = 3, lwd = 2, col = "blue")
+
+lines(x, dnorm(x, mean = mean(logR[,"DAX"]), sd = sd(logR[,"DAX"])),
+      lty = 2, lwd = 3, col = "orange")
+
+legend("topleft", c("KDE",paste("t: df = ",df),"Normal with MAD sd","Normal with sd = sd(logR[,DAX]) "),
+       lwd = c(2,2,2,3), lty = c(1,5,3,2),
+       col = c("black","red","blue","orange"))
+```
+
+```{r}
+par(mfrow  = c(1,1))
+x = seq(-0.1, 0.1, by = 0.001)
+df = 5
+
+mad_t = mad(logR[, "DAX"],
+            constant = sqrt(df/(df-2)) / qt(0.75,df))
+
+plot(density(logR[,"DAX"]) , lwd=2, ylim = c(0,60),xlim = c(-0.08,0))
+
+lines(x, dstd(x,mean = mean(logR[ ,"DAX"]), sd = mad_t, nu = df),
+      lty = 5, lwd = 2, col = "red")
+
+lines(x, dnorm(x, mean = mean(logR[,"DAX"]), sd = mad(logR[,"DAX"])),
+      lty = 3, lwd = 2, col = "blue")
+
+lines(x, dnorm(x, mean = mean(logR[,"DAX"]), sd = sd(logR[,"DAX"])),
+      lty = 2, lwd = 3, col = "orange")
+
+legend("topleft", c("KDE",paste("t: df = ",df),"Normal with MAD sd","Normal with sd = sd(logR[,DAX]) "),
+       lwd = c(2,2,2,3), lty = c(1,5,3,2),
+       col = c("black","red","blue","orange"))
+```
+
+---
+title: "E.D.A Chapter04 R Notebook"
+author: Bryan Lliguicota
+output: html_notebook
+---
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+#4.10 R Lab
+
+##4.10.1 European Stock Indicies
+
+- This lab uses Euro. Stock Indicies in **R's EuStockMarkets** database.
+    - Access the Database
+    - Learn its mode
+    - Learn its class
+    - plot the four time series
+    
+    
+```{r}
+# A class mts stands for multivariate time series
+data("EuStockMarkets")
+print("Mode: ")
+mode(EuStockMarkets)
+print("Class:")
+class(EuStockMarkets)
+plot(EuStockMarkets)
+```
+If you want to save a pdf image of the file run the followin code
+```{r}
+pdf("EuStock.pdf", width = 8, height = 8)
+plot(EuStockMarkets)
+graphics.off()
+```
+
+### Problem 1. 
+Question:    
+Write a brief description of the time series plots of the four indices. Do the series look stationary? Do the fluctuations in the series seem to be of constant size? If not, describe how the volatility fluctuates. 
+    
+Answer:    
+The fluctuations in the series are not of constant size, as time passes the variance increase as well as the mean. The volatility before ~1997 is not as high as it's after ~1997. The time series does not look stationary due to the wide range of variance and changing mean.
+
+Compute and plot the log returns on the indicies
+```{r}
+logR = diff(log(EuStockMarkets))
+plot(logR)
+```
+### Problem 2.
+Question:  
+Write a brief description of the time series plots of the four series of log returns. Do the series look stationary? Do the fluctuations in the series seem to be of constant size? If not, describe how the volatility fluctuates.  
+  
+Answer:   
+Yes, they do seem to be stationary conditional on the time interval, there is also volatility clustering. For the most part, the fluctuations are of constant size with some noticeable outliers. 
+
+>R Lesson: When data is stored in a data frame, it does not assume that the data is in time order. This would be appropriate if were using cross-sectional data.   
+Let's see how `plot()` works with a data frame object as opposed to a multivariate time series.
+
+```{r}
+print(class(logR))
+plot(as.data.frame(logR))
+```
+
+1. Create normal plots of the four indicies
+2. Test each for normality using the Shapiro-Wilk test
+
+
+```{r}
+colnames(logR)
+par(mfrow=c(2,2))
+for(indicie in colnames(logR)){
+  qqnorm(logR[, indicie], datax = T , main = indicie)
+  qqline(logR[, indicie], datax = T)
+  print(shapiro.test(logR[, indicie]))
+}
+```
+
+###Problem 3.
+Question:  
+Briefly describe the shape of each of the four normal plots and state whether the marginal distribution of each series is skewed or symmetric and whether its tails appear normal. If the tails do not appear normal, do they appear heavier or lighter than normal? What conclusions can be made from the Shapiro–Wilk tests? Include the plots with your work.
+  
+Answer:  
+    All four indices are showing a convex-concave shape(in varying degrees), meaning they have heavier tails than the normal distribution. To support this argument the Shapiro Wilk test gives a very small p-value. We can reject the null hypothesis that the data comes from a normal distribution. 
+    
+1. Create t-plots with 1,4,6,10,20 and 30 d.o.f for all four indicies. 
+
+>R Lesson: Notice how the reference line is created with the  `abline()` function, which added a line to the plot. The `lm()` function fits a line to the quantiles. We discuss `lm()` in chapter 9
+
+
+
+```{r}
+n = dim(logR)[1] #get the number of rows
+q_grid = (1:n)/(n+1) #create a vector of n equally spaced elements
+df_grid = c(1,4,6,10,20,30) #d.o.f !!!!
+index_names = colnames(logR)
+
+for(i in 1:4){
+  par(mfrow = c(3,2))
+  
+  for(df in df_grid){
+    qqplot(logR[,i], qt(q_grid,df),
+           main = paste(index_names[i]," ,df = ",df))
+    abline(lm(qt(c(0.25,0.75), df = df) ~ quantile(logR[,i], c(0.25,0.75))))
+  }
+}
+```
+
+###Problem 4. 
+Question:  
+What does the code `q.grid = (1:n) / (n + 1)` do? What does `qt(q.grid, df = df[j])` do? What does paste do?     
+
+Answer:  
+`q.grid = (1:n) / (n + 1)`  creates a vector of n equally spaced points between 1 and n. We use it as a vector of probabilities  
+`qt(q.grid, df = df[j])` , `qt()` is the quantile function for The student t distribution  
+paste converts values to strings and concatenates them into one string.
+
+
+###Problem 5.
+Question:  
+For the DAX index, state which choice of the degrees of freedom parameter gives the best-fitting t-distribution and explain why.  
+  
+Answer:  
+Both d.o.f 4 and 6 seem to be the best fits compared to the rest. As most of the data falls on the reference line except for a handfull of outliers.
+
+
+1. Create a K.D.E 
+2. Create two parametric density estimates, $t$ with **df = 5** d.o.f and normal for the DAX index  
+  i) Note: You should vary the **df** so that the $t$ density agrees as closely as possible with the K.D.E
+3. A **Robust Estimator of the Standard Deviation of the t-dist is calculated using the `mad()` function.
+  i) The default value for `constant` is $1.4846$ to which is calibrated to the normal distribution $\frac{1}{F^{-1}(.75)} = 1.4826$.
+  ii) To calibrate this to the t-dist, the normal quantile is replaced with the t-quantile **and** multiplied by $\frac{df}{df-2}$ to convert from the scale parameter to the S.D
+
+```{r}
+library("fGarch")
+```
+
+```{r}
+par(mfrow  = c(1,1))
+x = seq(-0.1, 0.1, by = 0.001)
+df = 5
+
+mad_t = mad(logR[, "DAX"],
+            constant = sqrt(df/(df-2)) / qt(0.75,df))
+
+plot(density(logR[,"DAX"]) , lwd=2, ylim = c(0,60))
+
+lines(x, dstd(x,mean = mean(logR[ ,"DAX"]), sd = mad_t, nu = df),
+      lty = 5, lwd = 2, col = "red")
+
+lines(x, dnorm(x, mean = mean(logR[,"DAX"]), sd = mad(logR[,"DAX"])),
+      lty = 3, lwd = 2, col = "blue")
+
+lines(x, dnorm(x, mean = mean(logR[,"DAX"]), sd = sd(logR[,"DAX"])),
+      lty = 2, lwd = 3, col = "orange")
+
+legend("topleft", c("KDE",paste("t: df = ",df),"Normal with MAD sd","Normal with sd = sd(logR[,DAX]) "),
+       lwd = c(2,2,2,3), lty = c(1,5,3,2),
+       col = c("black","red","blue","orange"))
+```
+
+```{r}
+par(mfrow  = c(1,1))
+x = seq(-0.1, 0.1, by = 0.001)
+df = 5
+
+mad_t = mad(logR[, "DAX"],
+            constant = sqrt(df/(df-2)) / qt(0.75,df))
+
+plot(density(logR[,"DAX"]) , lwd=2, ylim = c(0,20),xlim = c(-0.08,0))
+
+lines(x, dstd(x,mean = mean(logR[ ,"DAX"]), sd = mad_t, nu = df),
+      lty = 5, lwd = 2, col = "red")
+
+lines(x, dnorm(x, mean = mean(logR[,"DAX"]), sd = mad(logR[,"DAX"])),
+      lty = 3, lwd = 2, col = "blue")
+
+lines(x, dnorm(x, mean = mean(logR[,"DAX"]), sd = sd(logR[,"DAX"])),
+      lty = 2, lwd = 3, col = "orange")
+
+legend("topleft", c("KDE",paste("t: df = ",df),"Normal with MAD sd","Normal with sd = sd(logR[,DAX]) "),
+       lwd = c(2,2,2,3), lty = c(1,5,3,2),
+       col = c("black","red","blue","orange"))
+
+```
+
+```{r}
+par(mfrow  = c(1,1))
+x = seq(-0.1, 0.1, by = 0.001)
+df = 5
+
+mad_t = mad(logR[, "DAX"],
+            constant = sqrt(df/(df-2)) / qt(0.75,df))
+
+plot(density(logR[,"DAX"]) , lwd=2, ylim = c(0,20),xlim = c(0,0.06))
+
+lines(x, dstd(x,mean = mean(logR[ ,"DAX"]), sd = mad_t, nu = df),
+      lty = 5, lwd = 2, col = "red")
+
+lines(x, dnorm(x, mean = mean(logR[,"DAX"]), sd = mad(logR[,"DAX"])),
+      lty = 3, lwd = 2, col = "blue")
+
+lines(x, dnorm(x, mean = mean(logR[,"DAX"]), sd = sd(logR[,"DAX"])),
+      lty = 2, lwd = 3, col = "orange")
+
+legend("topright", c("KDE",paste("t: df = ",df),"Normal with MAD sd","Normal with sd = sd(logR[,DAX]) "),
+       lwd = c(2,2,2,3), lty = c(1,5,3,2),
+       col = c("black","red","blue","orange"))
+```
+
+###Problem 6.
+Question:  
+Do either of the parametric models provide a reasonably good fit to the first index? Explain.  
+  
+Answer:  
+Yes, the t-dist with df=5 provides a much better fit compared with the norma dist, but it is not ideal because it does a bad job matching the KDE.
+
+
+###Problem 7.
+Question:  
+Which bandwidth selector is used as the default by density? What is the default kernel?  
+  
+Answer:  
+The default bandwith selector is `adjust = 1`, the default kernal is 
